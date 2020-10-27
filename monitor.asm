@@ -10,17 +10,20 @@
 ;This is the base monitor. Consult README for information
 ;on including the I/O module specific to your system.
 
-        ORG XXXXH               ;See README for more info
+        ORG 0000H               ;See README for more info
+SERIALDAT equ 18H
+SERIALCTL equ 19H
+CTC3      equ 13H
 
 ;Initialization and sign-on message
 LOG:    JMP SETUP           ;See README for more info
-SE1:    LXI H, LOGMSG$
+SE1:    LXI H, LOGMSGSTR
         CALL STROUT
-        LXI H, MSG$
+        LXI H, MSGSTR
         CALL STROUT
 
 ;Main command loop
-CMDLP:  LXI H, PROMPT$
+CMDLP:  LXI H, PROMPTSTR
         CALL STROUT
         LXI H, CMDLP        ; Get CMDLP address in HL
         PUSH H              ; Push HL, prime stack for RET to CMDLP
@@ -38,7 +41,7 @@ CMDLP:  LXI H, PROMPT$
         JZ INPUT
         CPI 'L'
         JZ LOAD
-        LXI H, ERR$
+        LXI H, ERRSTR
         JMP ERROUT
 
 ;Get a port address, write byte out
@@ -322,7 +325,7 @@ ERROUT: CALL CRLF
 ;post: CR, LF printed to console
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 CRLF:   PUSH H
-        LXI H, CRLF$
+        LXI H, CRLFSTR
         CALL STROUT
         POP H
         RET
@@ -371,15 +374,71 @@ LOAD4:  CALL CINNE      ; Done getting data, silently eat chars
         CPI 10          ; Check for LF
         JNZ LOAD4
         RET             ; Got LF, return to command loop
-CSUMER: LXI H, CSERR$   ; Print checksum error to console
+CSUMER: LXI H, CSERRSTR   ; Print checksum error to console
         JMP ERROUT      ; RET from ERROUT will return to command loop
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Monitor Strings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-LOGMSG$: db 13, 10, 10, 'GWMON-80 0.1.4 for 8080/8085/Z80 and Compatible', 13, 10
-         db 'Copyright (c) 2019 The Glitch Works', 0
-PROMPT$: db 13, 10, 10, '>', 0
-CSERR$:  db 'CHECKSUM '
-ERR$:    db 'ERROR', 0
-CRLF$:   db 13, 10, 0
+LOGMSGSTR: db 13, 10, 10, "GWMON-80 0.1.4 for 8080/8085/Z80 and Compatible", 13, 10
+         db "Copyright (c) 2019 The Glitch Works", 0
+PROMPTSTR: db 13, 10, 10, '>', 0
+CSERRSTR:  db "CHECKSUM "
+ERRSTR:    db "ERROR", 0
+CRLFSTR:   db 13, 10, 0
+
+
+SETUP:  LXI SP, 0F000H
+        MVI A, 018H
+        OUT SERIALCTL
+
+        MVI A, 04H
+        OUT SERIALCTL
+        MVI A, 044H
+        OUT SERIALCTL
+
+        MVI A, 03H
+        OUT SERIALCTL
+        MVI A, 0C1H
+        OUT SERIALCTL
+
+        MVI A, 05H
+        OUT SERIALCTL
+        MVI A, 06AH
+        OUT SERIALCTL
+
+        MVI A, 01H
+        OUT SERIALCTL
+        MVI A, 00H
+        OUT SERIALCTL
+
+        MVI A, 17H
+        OUT CTC3
+        MVI A, 04H
+        OUT CTC3
+
+        JMP SE1
+
+CINNE:  MVI A, 30H
+        OUT SERIALCTL
+        IN  SERIALCTL
+        ANI 01H
+        JZ  CINNE
+        IN  SERIALDAT
+        RET
+
+CIN:    CALL CINNE
+        OUT SERIALDAT
+        RET
+
+COUT:   PUSH B
+        MOV B, A
+COUT1:  IN  SERIALCTL
+        ANI 04H 
+        JZ  COUT1
+        MOV A, B
+        OUT SERIALDAT
+        POP B
+        RET
+ 
+MSGSTR:    db 13, 10, 0
